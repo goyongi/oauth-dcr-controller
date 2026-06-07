@@ -11,16 +11,14 @@ metadata:
 spec:
   endpoints:
     - path: /metrics
-      port: https # Ensure this is the name of the port that exposes HTTPS metrics
-      scheme: https
-      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
-      tlsConfig:
-        # TODO(user): The option insecureSkipVerify: true is not recommended for production since it disables
-        # certificate verification, exposing the system to potential man-in-the-middle attacks.
-        # For production environments, it is recommended to use cert-manager for automatic TLS certificate management.
-        # To apply this configuration, enable cert-manager and use the patch located at config/prometheus/servicemonitor_tls_patch.yaml,
-        # which securely references the certificate from the 'metrics-server-cert' secret.
-        insecureSkipVerify: true
+      port: http # Name of the Service port that exposes the (plain HTTP) metrics
+      scheme: http
+      # The metrics endpoint is served over plain HTTP without authn/authz
+      # (see --metrics-secure in cmd/main.go). Access is expected to be
+      # restricted at the network layer via config/network-policy. To serve
+      # metrics over HTTPS with authn/authz instead, set --metrics-secure=true,
+      # restore the metrics-auth RBAC in config/rbac, and switch this back to
+      # scheme: https with a bearerTokenFile + tlsConfig.
   selector:
     matchLabels:
       control-plane: controller-manager
