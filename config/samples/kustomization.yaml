@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- oauth_v1alpha1_dynamicclientregistration.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

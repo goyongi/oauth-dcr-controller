@@ -1,11 +1,44 @@
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  labels:
-    app.kubernetes.io/name: oauth-dcr
-    app.kubernetes.io/managed-by: kustomize
   name: manager-role
 rules:
-- apiGroups: [""]
-  resources: ["pods"]
-  verbs: ["get", "list", "watch"]
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - oauth.goyongi.com
+  resources:
+  - dynamicclientregistrations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - oauth.goyongi.com
+  resources:
+  - dynamicclientregistrations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - oauth.goyongi.com
+  resources:
+  - dynamicclientregistrations/status
+  verbs:
+  - get
+  - patch
+  - update

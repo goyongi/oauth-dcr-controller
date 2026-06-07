@@ -1,4 +1,4 @@
-# oauth-dcr - AI Agent Guide
+# oauth-dcr-controller - AI Agent Guide
 
 ## Project Structure
 

@@ -1,0 +1,32 @@
+apiVersion: oauth.goyongi.com/v1alpha1
+kind: DynamicClientRegistration
+metadata:
+  labels:
+    app.kubernetes.io/name: oauth-dcr-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: dynamicclientregistration-sample
+spec:
+  # OAuth 2.0 Dynamic Client Registration endpoint (RFC 7591).
+  registrationEndpoint: https://idp.tailxxxxx.ts.net/register
+  # Optional bearer token ("initial access token") to authorize registration.
+  # Create the Secret separately, e.g.:
+  #   kubectl create secret generic dcr-initial-access-token --from-literal=token=<TOKEN>
+  # initialAccessTokenRef:
+  #   name: dcr-initial-access-token
+  #   key: token
+  # Name of the Secret that will receive the issued credentials.
+  # Defaults to the resource name when omitted.
+  credentialsSecretName: dynamicclientregistration-sample-credentials
+  client:
+    clientName: Example App
+    redirectURIs:
+      - https://app.example.com/callback
+    grantTypes:
+      - authorization_code
+      - refresh_token
+    responseTypes:
+      - code
+    tokenEndpointAuthMethod: client_secret_basic
+    scope: "openid profile email"
+    contacts:
+      - platform@example.com

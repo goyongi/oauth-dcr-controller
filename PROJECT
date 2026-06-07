@@ -6,6 +6,16 @@ cliVersion: 4.14.0
 domain: goyongi.com
 layout:
 - go.kubebuilder.io/v4
-projectName: oauth-dcr
+projectName: oauth-dcr-controller
 repo: goyongi.com/oauth-dcr-controller
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: goyongi.com
+  group: oauth
+  kind: DynamicClientRegistration
+  path: goyongi.com/oauth-dcr-controller/api/v1alpha1
+  version: v1alpha1
 version: "3"
