@@ -1,135 +1,116 @@
-# oauth-dcr-controller
-// TODO(user): Add simple overview of use/purpose
+# OAuth DCR Controller
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+Create a `DynamicClientRegistration` (`dcr`) to register an OAuth client with
+your Tailscale identity provider's Dynamic Client Registration endpoint. The
+controller stores the returned credentials in a Kubernetes Secret in the same
+namespace as the resource.
 
-## Getting Started
+## Install
 
-### Prerequisites
-- go version v1.24.6+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
-
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+Each [release](https://github.com/goyongi/oauth-dcr-controller/releases)
+publishes an `install.yaml` containing the CRD, RBAC, and controller
+Deployment (image `ghcr.io/goyongi/oauth-dcr-controller`). Apply the one for
+the version you want:
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/oauth-dcr-controller:tag
+kubectl apply -f https://github.com/goyongi/oauth-dcr-controller/releases/download/vX.Y.Z/install.yaml
 ```
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
-
-**Install the CRDs into the cluster:**
+To uninstall, delete all `dcr` resources first and wait for them to be
+removed (the controller must be running to clear their finalizers), then:
 
 ```sh
-make install
+kubectl delete -f https://github.com/goyongi/oauth-dcr-controller/releases/download/vX.Y.Z/install.yaml
 ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+## Create a registration
+
+If the registration endpoint requires an initial access token, store it in a
+Secret in the resource's namespace. The controller reads the configured key
+(`token` by default) and sends it as a bearer token:
 
 ```sh
-make deploy IMG=<some-registry>/oauth-dcr-controller:tag
+kubectl create secret generic dcr-initial-token \
+  -n my-app --from-literal=token='<initial-access-token>'
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+Create a `DynamicClientRegistration`, using the DCR endpoint configured for
+your Tailscale IdP and metadata accepted by that IdP:
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+```yaml
+apiVersion: oauth.goyongi.com/v1alpha1
+kind: DynamicClientRegistration
+metadata:
+  name: my-client
+  namespace: my-app
+spec:
+  registrationEndpoint: https://idp.example.ts.net/register
+  # Omit initialAccessTokenRef if the endpoint does not require a token.
+  initialAccessTokenRef:
+    name: dcr-initial-token
+    key: token
+  # Optional; defaults to the resource name.
+  credentialsSecretName: my-client-credentials
+  client:
+    clientName: My application
+    redirectURIs:
+      - https://app.example.com/oauth/callback
+    grantTypes:
+      - authorization_code
+      - refresh_token
+    responseTypes:
+      - code
+    tokenEndpointAuthMethod: client_secret_basic
+    scope: "openid profile email"
+    contacts:
+      - platform@example.com
+```
+
+The endpoint URL above is an example; use the registration endpoint for your
+Tailscale IdP. `spec.client` supports `redirectURIs`,
+`tokenEndpointAuthMethod`, `grantTypes`, `responseTypes`, `clientName`,
+`clientURI`, `logoURI`, `scope`, `contacts`, `tosURI`, `policyURI`, `jwksURI`,
+`softwareID`, and `softwareVersion`. Use `extraMetadata` for additional
+string-valued metadata supported by the IdP.
+
+## Check registration and use credentials
+
+Registration succeeds when the resource's `Ready` condition becomes `True`.
+The issued client ID is shown in status; client secrets and registration access
+tokens are not.
 
 ```sh
-kubectl apply -k config/samples/
+kubectl get dcr my-client -n my-app
+kubectl describe dcr my-client -n my-app
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+The credentials Secret is named by `credentialsSecretName`, or by the resource
+name when that field is omitted. It may contain:
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+- `client_id`
+- `client_secret` (not present for public clients or when not returned)
+- `registration_access_token` and `registration_client_uri` (when returned)
+- `registration_response` (the full response; may include credentials)
 
-```sh
-kubectl delete -k config/samples/
-```
+Treat the entire Secret as sensitive. Configure your application to consume
+the Secret using its usual Kubernetes secret mechanism.
 
-**Delete the APIs(CRDs) from the cluster:**
+## Important behavior
 
-```sh
-make uninstall
-```
+- Registration is performed once. Editing `spec.client` after registration
+  does not update the client at the IdP.
+- To register a new client, delete the `dcr`, wait for it to be removed, then
+  create it again. The controller attempts upstream cleanup on deletion if the
+  IdP returned a management URL and access token; cleanup failure does not
+  prevent Kubernetes deletion.
+- Deleting the `dcr` also deletes its owned credentials Secret. The controller
+  does not rotate credentials.
 
-**UnDeploy the controller from the cluster:**
+## Troubleshooting
 
-```sh
-make undeploy
-```
-
-## Project Distribution
-
-Following the options to release and provide this solution to the users.
-
-### By providing a bundle with all YAML files
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=<some-registry>/oauth-dcr-controller:tag
-```
-
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
-
-2. Using the installer
-
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/oauth-dcr-controller/<tag or branch>/dist/install.yaml
-```
-
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v2-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-
-## License
-
-Copyright 2026.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+If `Ready` is `False`, inspect its reason and message with
+`kubectl describe dcr my-client -n my-app`. Common causes are an incorrect or
+unreachable endpoint, a missing or
+incorrect initial-token Secret/key, or metadata rejected by the IdP. The
+controller retries failed registrations. Check the controller manager logs for
+the underlying error.
