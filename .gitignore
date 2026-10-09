@@ -32,3 +32,5 @@ go.work
 # Ignore generated code
 .claude
 CLAUDE.md
+# Release install bundle (built by `make build-installer`, published by CI)
+dist/
